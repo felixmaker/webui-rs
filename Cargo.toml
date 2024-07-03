@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "webui-sys",
+    "webui-rs",	
+]
+resolver = "2"

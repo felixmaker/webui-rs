@@ -1,0 +1,10 @@
+[package]
+name = "webui-sys"
+version = "0.1.0"
+edition = "2021"
+exclude = ["webui/.github", "webui/examples", "webui/tests"]
+
+[dependencies]
+
+[build-dependencies]
+cc = "1"
