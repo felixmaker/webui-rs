@@ -2,7 +2,7 @@ use std::ffi::{c_char, CStr, CString};
 
 use webui_sys::*;
 
-use crate::{CONTEXT, EventType, Window};
+use crate::{EventType, Window, CONTEXT};
 
 /// The event type.
 #[repr(transparent)]
@@ -22,7 +22,7 @@ impl Event {
     }
 
     /// Get the window.
-    pub fn get_window(&self) -> Option<Window> {
+    pub fn window(&self) -> Option<Window> {
         let window = self.get_event().window;
         CONTEXT
             .lock()
@@ -32,13 +32,41 @@ impl Event {
             .map(|inner| Window { inner })
     }
 
-    pub(crate) fn get_bind_id(&self) -> usize {
+    pub(crate) fn bind_id(&self) -> usize {
         self.get_event().bind_id
     }
 
     /// Get the event type.
-    pub fn get_type(&self) -> EventType {
+    pub fn event_type(&self) -> EventType {
         unsafe { std::mem::transmute(self.get_event().event_type) }
+    }
+
+    /// Get the element.
+    pub fn element(&self) -> String {
+        let element = self.get_event().element;
+        unsafe { CStr::from_ptr(element).to_string_lossy().to_string() }
+    }
+
+    /// Get the event number.
+    pub fn event_number(&self) -> usize {
+        self.get_event().event_number
+    }
+
+    /// Get the client ID.
+    pub fn client_id(&self) -> usize {
+        self.get_event().client_id
+    }
+
+    /// Get the connection ID.
+    pub fn connection_id(&self) -> usize {
+        self.get_event().connection_id
+    }
+
+    /// Get the cookies.
+    pub fn cookies(&self) -> Option<String> {
+        let cookies = self.get_event().cookies;
+        (!cookies.is_null())
+            .then_some(unsafe { CStr::from_ptr(cookies).to_string_lossy().to_string() })
     }
 
     /// Show a window for a specific single client. Useful in multi-client mode to send different content to different connected
