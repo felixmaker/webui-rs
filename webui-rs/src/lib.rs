@@ -3,13 +3,18 @@ mod event;
 mod handler;
 mod window;
 
-use std::ffi::CString;
+use std::{
+    ffi::{c_char, c_void, CStr, CString},
+    panic::{catch_unwind, AssertUnwindSafe},
+};
 
 pub(crate) use context::*;
 pub use event::*;
 pub use window::*;
 
 use webui_sys::*;
+
+use crate::handler::LoggerHandler;
 
 /// Close all open windows. This will make wait() return (Break).
 pub fn exit() {
@@ -83,12 +88,122 @@ pub fn set_asynchronous_response(status: bool) {
     set_config(Config::AsynchronousResponse, status);
 }
 
+/// Set the web-server root folder path for all windows.
+pub fn set_default_root_folder(path: &str) -> bool {
+    let path = CString::new(path).unwrap();
+    unsafe { webui_set_default_root_folder(path.as_ptr()) }
+}
+
+/// Get the HTTP MIME type string for a given file extension.
+pub fn get_mime_type(file: &str) -> String {
+    let file = CString::new(file).unwrap();
+    unsafe {
+        let mine_type = webui_get_mime_type(file.as_ptr());
+        CStr::from_ptr(mine_type).to_string_lossy().to_string()
+    }
+}
+
+/// Check whether a specific web browser is installed on the system.
+pub fn browser_exist(browser: Browser) -> bool {
+    unsafe { webui_browser_exist(browser as _) }
+}
+
+/// Set a custom folder path where WebUI should look for the browser executable.
+pub fn set_browser_folder(path: &str) {
+    let path = CString::new(path).unwrap();
+    unsafe { webui_set_browser_folder(path.as_ptr()) }
+}
+
+/// Delete all local web-browser profile folders created by WebUI.
+pub fn delete_all_profiles() {
+    unsafe { webui_delete_all_profiles() }
+}
+
+/// Find and return an available (unused) network port.
+pub fn get_port() -> usize {
+    unsafe { webui_get_free_port() }
+}
+
+/// Encode a string to Base64.
+pub fn encode(text: &str) -> String {
+    let text = CString::new(text).unwrap();
+    let encoded = unsafe { webui_encode(text.as_ptr()) };
+    let result = unsafe { CStr::from_ptr(encoded as _).to_string_lossy().to_string() };
+    unsafe { webui_free(encoded as _) };
+    result
+}
+
+/// Decode a Base64-encoded string.
+pub fn decode(text: &str) -> String {
+    let text = CString::new(text).unwrap();
+    let decoded = unsafe { webui_decode(text.as_ptr()) };
+    let result = unsafe { CStr::from_ptr(decoded as _).to_string_lossy().to_string() };
+    unsafe { webui_free(decoded as _) };
+    result
+}
+
+/// Set the SSL/TLS certificate and private key (both in PEM format). If called with empty strings, WebUI generates
+/// a self-signed certificate.
+///
+/// # Remarks
+/// This works only with the TLS build of WebUI (webui-2-secure).
+pub fn set_tls_certificate(certificate_pem: &str, private_key_pem: &str) -> bool {
+    let certificate_pem = CString::new(certificate_pem).unwrap();
+    let private_key_pem = CString::new(private_key_pem).unwrap();
+    unsafe { webui_set_tls_certificate(certificate_pem.as_ptr(), private_key_pem.as_ptr()) }
+}
+
+/// Set a custom logging function to receive WebUI's internal log messages. Useful for debugging or integrating with your
+/// own logging system.
+pub fn set_logger<F>(callback: F)
+where
+    F: LoggerHandler,
+{
+    extern "C" fn shim(level: usize, log: *const c_char, user_data: *mut c_void) {
+        let level: LoggerLevel = unsafe { std::mem::transmute(level) };
+        let log = unsafe { CStr::from_ptr(log).to_string_lossy().to_string() };
+        let callback = unsafe { &*(user_data as *mut Box<dyn LoggerHandler>) };
+        let _ = catch_unwind(AssertUnwindSafe(|| callback(level, &log)));
+    }
+    let user_data: Box<dyn LoggerHandler> = Box::new(callback);
+    let user_data = Box::into_raw(Box::new(user_data));
+    unsafe {
+        webui_set_logger(Some(shim), user_data as _);
+    }
+}
+
+/// Free all memory resources used by WebUI. Should be called only once at the very end of your application,
+/// after wait() returns.
+pub unsafe fn clean() {
+    webui_clean();
+}
+
+/// Get the error code from the most recent WebUI operation that failed.
+pub(crate) fn get_last_error_number() -> usize {
+    unsafe { webui_get_last_error_number() }
+}
+
+/// Get the human-readable error message from the most recent WebUI operation that failed.
+pub(crate) fn get_last_error_message() -> String {
+    unsafe {
+        let message = webui_get_last_error_message();
+        CStr::from_ptr(message).to_string_lossy().to_string()
+    }
+}
+
 #[repr(i32)] // Replace u32 with the actual type of webui_config
 pub(crate) enum Config {
-    ShowWaitConnection = 0,
-    UiEventBlocking = 1,
-    FolderMonitor = 2,
-    MultiClient = 3,
-    UseCookies = 4,
-    AsynchronousResponse = 5,
+    ShowWaitConnection,
+    UiEventBlocking,
+    FolderMonitor,
+    MultiClient,
+    UseCookies,
+    AsynchronousResponse,
+}
+
+#[repr(usize)]
+pub enum LoggerLevel {
+    Debug,
+    Info,
+    Error,
 }

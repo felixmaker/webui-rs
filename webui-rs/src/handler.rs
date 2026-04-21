@@ -1,4 +1,4 @@
-use crate::{Event, Window};
+use crate::{Event, LoggerLevel, Window};
 
 macro_rules! define_handler {
     (
@@ -27,4 +27,7 @@ define_handler! {
     /// The handler receives the requested filename and must return a complete HTTP response 
     /// (headers + body). Replaces any handler set with set_file_handler_window.
     FileHandlerWindow: (&Window, &str) -> Option<String>;
+
+    /// The logger callback function
+    LoggerHandler: (LoggerLevel, &str)
 }

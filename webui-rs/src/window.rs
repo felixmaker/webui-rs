@@ -45,12 +45,6 @@ impl Window {
         self.inner.id
     }
 
-    /// Get the recommended web browser ID to use. If you are already using one, this function will return the same ID.
-    pub fn get_best_browser(&self) -> Browser {
-        let browser = unsafe { webui_get_best_browser(self.id()) };
-        Browser::from_id(browser as i32)
-    }
-
     /// Show a window using embedded HTML, a URL, a local file, or a local folder. If the window is already open, it will
     /// be refreshed. This refreshes all clients in multi-client mode.
     ///
@@ -70,7 +64,7 @@ impl Window {
     /// avoid this.
     pub fn show_browser(&self, content: &str, browser: Browser) {
         let content = CString::new(content).unwrap();
-        unsafe { webui_show_browser(self.id(), content.as_ptr(), browser.to_id() as usize) };
+        unsafe { webui_show_browser(self.id(), content.as_ptr(), browser as _) };
     }
 
     /// Show a WebView window using embedded HTML, a URL, or a local file. If the window is already open, it will be refreshed.
@@ -98,12 +92,6 @@ impl Window {
     /// Close the window. The window object will still exist and can be shown again later.
     pub fn close(&self) {
         unsafe { webui_close(self.id()) }
-    }
-
-    /// Set the web-server root folder path.
-    pub fn set_root_folder(&self, path: &str) -> bool {
-        let path = CString::new(path).unwrap();
-        unsafe { webui_set_root_folder(self.id(), path.as_ptr()) }
     }
 
     /// Check if the window is still running.
@@ -239,21 +227,6 @@ impl Window {
     pub fn navigate(&self, url: &str) {
         let url = CString::new(url).unwrap();
         unsafe { webui_navigate(self.id(), url.as_ptr()) }
-    }
-
-    /// Set the web browser profile to use. An empty name and path means the default user profile.
-    pub fn set_profile(&self, name: &str, path: &str) {
-        let name = CString::new(name).unwrap();
-        let path = CString::new(path).unwrap();
-        unsafe { webui_set_profile(self.id(), name.as_ptr(), path.as_ptr()) }
-    }
-
-    /// Set the web browser proxy server to use.
-    ///
-    /// Note: Need to be called before show().
-    pub fn set_proxy(&self, proxy_server: &str) {
-        let proxy_server = CString::new(proxy_server).unwrap();
-        unsafe { webui_set_proxy(self.id(), proxy_server.as_ptr()) }
     }
 
     /// Get the current URL of a running window's web server.
@@ -406,30 +379,69 @@ impl Window {
         }
     }
 
+    /// Set the web-server root folder path for a specific window.
+    pub fn set_root_folder(&self, path: &str) -> bool {
+        let path = CString::new(path).unwrap();
+        unsafe { webui_set_root_folder(self.id(), path.as_ptr()) }
+    }
+
+    /// Get the recommended web browser ID to use for this window. If a browser is already in use, returns that browser's ID.
+    pub fn get_best_browser(&self) -> Browser {
+        let browser = unsafe { webui_get_best_browser(self.id()) };
+        Browser::from_id(browser as i32)
+    }
+
+    /// Set the web browser profile to use. An empty name and path uses the default user profile.
+    pub fn set_profile(&self, name: &str, path: &str) {
+        let name = CString::new(name).unwrap();
+        let path = CString::new(path).unwrap();
+        unsafe { webui_set_profile(self.id(), name.as_ptr(), path.as_ptr()) }
+    }
+
+    /// Set the web browser proxy server.
+    ///
+    /// # Remarks
+    /// Must be called before show().
+    pub fn set_proxy(&self, proxy_server: &str) {
+        let proxy_server = CString::new(proxy_server).unwrap();
+        unsafe { webui_set_proxy(self.id(), proxy_server.as_ptr()) }
+    }
+
     /// Delete a specific window web-browser local folder profile.
     ///
-    /// Note: It's recommended to be called when program exit, and after all windows are closed.
-    ///
-    /// This can break functionality of other running windows if using the same web-browser profile.
+    /// # Remarks
+    /// Recommended to call after all windows are closed, before clean().
+    /// This can break functionality of other windows using the same browser profile.
     pub fn delete_profile(&self) {
         unsafe { webui_delete_profile(self.id()) }
     }
 
-    /// Get the ID of the parent process (The web browser may re-create another new process).
+    /// Get the network port used by the running window's web server. Useful for constructing the webui.js URL when
+    /// integrating with an external server.
+    pub fn get_port(&self) -> usize {
+        unsafe { webui_get_port(self.id()) }
+    }
+
+    /// Set a specific network port for the window's web server. Useful when integrating with an external web server like NGINX.
+    pub fn set_port(&self, port: usize) -> bool {
+        unsafe { webui_set_port(self.id(), port) }
+    }
+
+    /// Get the process ID of the backend application (the parent process). The web browser may create additional child processes.
     pub fn get_parent_process_id(&self) -> usize {
         unsafe { webui_get_parent_process_id(self.id()) }
     }
 
-    /// Get the ID of the last child process (The web browser may re-create other child process).
+    /// Get the process ID of the browser window child process. In WebView mode, returns the parent PID because backend and WebView 
+    /// run in the same process.
     pub fn get_child_process_id(&self) -> usize {
         unsafe { webui_get_child_process_id(self.id()) }
     }
 
-    /// Set a custom web-server network port to be used by WebUI.
-    /// This can be useful to determine the HTTP link of `webui.js`in case
-    /// you are trying to use WebUI with an external web-server like NGNIX.
-    pub fn set_port(&self, port: usize) -> bool {
-        unsafe { webui_set_port(self.id(), port) }
+    /// Get the native window handle. On Windows returns HWND (works with both WebView and web browser). On Linux returns GtkWindow* 
+    /// (WebView only).
+    pub fn get_window_handler(&self) -> *mut c_void {
+        unsafe { webui_get_hwnd(self.id()) }
     }
 
     /// Run JavaScript without waiting for the response.
@@ -437,11 +449,6 @@ impl Window {
         let script = CString::new(script).unwrap();
         unsafe { webui_run(self.id(), script.as_ptr()) }
     }
-
-    // /// Bind an HTML element event with a function. Empty element means all events.
-    // pub fn bind(&self, element_id: &str, event: &Event) {
-
-    // }
 }
 
 impl Drop for WindowInner {
@@ -465,6 +472,7 @@ pub enum Runtime {
     Bun = 3,
 }
 
+#[repr(i32)]
 pub enum Browser {
     NoBrowser,
     AnyBrowser,
@@ -499,24 +507,6 @@ impl Browser {
             Yandex => Self::Yandex,
             ChromiumBased => Self::ChromiumBased,
             _ => unimplemented!(),
-        }
-    }
-
-    fn to_id(&self) -> webui_browser {
-        match self {
-            Self::NoBrowser => NoBrowser,
-            Self::AnyBrowser => AnyBrowser,
-            Self::Chrome => Chrome,
-            Self::Firefox => Firefox,
-            Self::Edge => Edge,
-            Self::Safari => Safari,
-            Self::Chromium => Chromium,
-            Self::Opera => Opera,
-            Self::Brave => Brave,
-            Self::Vivaldi => Vivaldi,
-            Self::Epic => Epic,
-            Self::Yandex => Yandex,
-            Self::ChromiumBased => ChromiumBased,
         }
     }
 }
