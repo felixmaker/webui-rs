@@ -1,4 +1,8 @@
-use std::ffi::{c_char, CStr, CString};
+use std::{
+    ffi::{c_char, CStr, CString},
+    marker::PhantomData,
+    ptr::NonNull,
+};
 
 use webui_sys::*;
 
@@ -6,19 +10,27 @@ use crate::{EventType, Window, CONTEXT};
 
 /// The event type.
 #[repr(transparent)]
-pub struct Event {
-    pub(crate) inner: *mut webui_event_t,
+pub struct Event<'a> {
+    pub(crate) inner: NonNull<webui_event_t>,
+    _marker: PhantomData<&'a webui_event_t>,
 }
 
-impl Event {
+impl<'a> Event<'a> {
+    pub(crate) unsafe fn new(ptr: *mut webui_event_t) -> Option<Self> {
+        NonNull::new(ptr).map(|inner| Self {
+            inner,
+            _marker: std::marker::PhantomData,
+        })
+    }
+
     /// Get the event.
     pub(crate) fn get_event(&self) -> &webui_event_t {
-        unsafe { &*self.inner }
+        unsafe { self.inner.as_ref() }
     }
 
     /// Get the inner pointer.
     pub(crate) fn as_ptr(&self) -> *mut webui_event_t {
-        self.inner
+        self.inner.as_ptr()
     }
 
     /// Get the window.

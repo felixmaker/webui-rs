@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
-    ffi::{CStr, CString, c_char, c_int, c_void},
-    panic::{AssertUnwindSafe, catch_unwind},
+    ffi::{c_char, c_int, c_void, CStr, CString},
+    panic::{catch_unwind, AssertUnwindSafe},
     sync::{Arc, Mutex},
 };
 
@@ -256,9 +256,11 @@ impl Window {
     {
         let function = CString::new(function).unwrap();
         extern "C" fn shim(event: *mut webui_event_t) {
-            let event = Event { inner: event };
-            let window = event.get_window();
-            let bind_id = event.get_bind_id();
+            let Some(event) = (unsafe { Event::new(event) }) else {
+                return;
+            };
+            let window = event.window();
+            let bind_id = event.bind_id();
 
             if let Some(window) = window {
                 let callback = window
