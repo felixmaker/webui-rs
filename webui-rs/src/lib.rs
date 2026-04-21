@@ -1,4 +1,5 @@
 mod context;
+mod error;
 mod event;
 mod handler;
 mod window;
@@ -9,6 +10,7 @@ use std::{
 };
 
 pub(crate) use context::*;
+pub use error::*;
 pub use event::*;
 pub use window::*;
 

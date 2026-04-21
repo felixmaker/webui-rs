@@ -8,7 +8,7 @@ use std::{
 
 use webui_sys::*;
 
-use crate::{get_window, handler::*, Event, CONTEXT};
+use crate::{get_window, handler::*, Event, WebUIError, CONTEXT};
 
 pub(crate) struct WindowInner {
     id: usize,
@@ -51,9 +51,13 @@ impl Window {
     /// # Remarks
     /// To use only a specific browser please use show_browser()
     /// To use only WebView please use show_webview()
-    pub fn show(&self, content: &str) -> bool {
+    pub fn show(&self, content: &str) -> Result<(), WebUIError> {
         let content = CString::new(content).unwrap();
-        unsafe { webui_show(self.id(), content.as_ptr()) }
+        if unsafe { webui_show(self.id(), content.as_ptr()) } {
+            Ok(())
+        } else {
+            Err(WebUIError::get_last_error())
+        }
     }
 
     /// Show a window using a specific web browser.
@@ -380,9 +384,10 @@ impl Window {
     }
 
     /// Set the web-server root folder path for a specific window.
-    pub fn set_root_folder(&self, path: &str) -> bool {
+    pub fn set_root_folder(&self, path: &str) -> Result<(), WebUIError> {
         let path = CString::new(path).unwrap();
-        unsafe { webui_set_root_folder(self.id(), path.as_ptr()) }
+        let result = unsafe { webui_set_root_folder(self.id(), path.as_ptr()) };
+        WebUIError::from_bool(result)
     }
 
     /// Get the recommended web browser ID to use for this window. If a browser is already in use, returns that browser's ID.
@@ -432,13 +437,13 @@ impl Window {
         unsafe { webui_get_parent_process_id(self.id()) }
     }
 
-    /// Get the process ID of the browser window child process. In WebView mode, returns the parent PID because backend and WebView 
+    /// Get the process ID of the browser window child process. In WebView mode, returns the parent PID because backend and WebView
     /// run in the same process.
     pub fn get_child_process_id(&self) -> usize {
         unsafe { webui_get_child_process_id(self.id()) }
     }
 
-    /// Get the native window handle. On Windows returns HWND (works with both WebView and web browser). On Linux returns GtkWindow* 
+    /// Get the native window handle. On Windows returns HWND (works with both WebView and web browser). On Linux returns GtkWindow*
     /// (WebView only).
     pub fn get_window_handler(&self) -> *mut c_void {
         unsafe { webui_get_hwnd(self.id()) }
