@@ -5,7 +5,7 @@ fn main() {
 
     window.bind("say_hello", |event| {
         println!("Say Hello");
-        if let Some(window) = event.get_window() {
+        if let Some(window) = event.window() {
             println!("URL: {}", window.get_url());
             window.bind("say_hello", |_| {
                 println!("Say Hello, No longer")
