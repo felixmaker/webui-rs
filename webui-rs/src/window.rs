@@ -1,14 +1,13 @@
 use std::{
     collections::HashMap,
-    ffi::{c_char, c_int, CStr, CString},
-    os::raw::c_void,
-    panic::{catch_unwind, AssertUnwindSafe},
+    ffi::{CStr, CString, c_char, c_int, c_void},
+    panic::{AssertUnwindSafe, catch_unwind},
     sync::{Arc, Mutex},
 };
 
 use webui_sys::*;
 
-use crate::{get_window, handler::*, Event, WebUIError, CONTEXT};
+use crate::{get_window, handler::*, Browser, Event, Runtime, WebUIError, CONTEXT};
 
 pub(crate) struct WindowInner {
     id: usize,
@@ -393,7 +392,7 @@ impl Window {
     /// Get the recommended web browser ID to use for this window. If a browser is already in use, returns that browser's ID.
     pub fn get_best_browser(&self) -> Browser {
         let browser = unsafe { webui_get_best_browser(self.id()) };
-        Browser::from_id(browser as i32)
+        unsafe { std::mem::transmute(browser) }
     }
 
     /// Set the web browser profile to use. An empty name and path uses the default user profile.
@@ -461,57 +460,5 @@ impl Drop for WindowInner {
         let mut context = CONTEXT.lock().unwrap();
         unsafe { webui_destroy(self.id) };
         context.remove(&self.id);
-    }
-}
-
-#[repr(i32)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Runtime {
-    /// No runtime
-    None = 0,
-    /// Deno runtime
-    Deno = 1,
-    /// Node.js runtime
-    NodeJS = 2,
-    /// Bun runtime
-    Bun = 3,
-}
-
-#[repr(i32)]
-pub enum Browser {
-    NoBrowser,
-    AnyBrowser,
-    Chrome,
-    Firefox,
-    Edge,
-    Safari,
-    Chromium,
-    Opera,
-    Brave,
-    Vivaldi,
-    Epic,
-    Yandex,
-    ChromiumBased,
-}
-
-impl Browser {
-    #[allow(non_upper_case_globals)]
-    fn from_id(id: webui_browser) -> Self {
-        match id {
-            NoBrowser => Self::NoBrowser,
-            AnyBrowser => Self::AnyBrowser,
-            Chrome => Self::Chrome,
-            Firefox => Self::Firefox,
-            Edge => Self::Edge,
-            Safari => Self::Safari,
-            Chromium => Self::Chromium,
-            Opera => Self::Opera,
-            Brave => Self::Brave,
-            Vivaldi => Self::Vivaldi,
-            Epic => Self::Epic,
-            Yandex => Self::Yandex,
-            ChromiumBased => Self::ChromiumBased,
-            _ => unimplemented!(),
-        }
     }
 }

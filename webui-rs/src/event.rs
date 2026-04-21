@@ -2,7 +2,7 @@ use std::ffi::{c_char, CStr, CString};
 
 use webui_sys::*;
 
-use crate::{Window, CONTEXT};
+use crate::{CONTEXT, EventType, Window};
 
 /// The event type.
 #[repr(transparent)]
@@ -38,14 +38,7 @@ impl Event {
 
     /// Get the event type.
     pub fn get_type(&self) -> EventType {
-        match self.get_event().event_type {
-            0 => EventType::Disconnected,
-            1 => EventType::Connected,
-            2 => EventType::MouseClick,
-            3 => EventType::Navigation,
-            4 => EventType::Callback,
-            _ => EventType::Callback,
-        }
+        unsafe { std::mem::transmute(self.get_event().event_type) }
     }
 
     /// Show a window for a specific single client. Useful in multi-client mode to send different content to different connected
@@ -183,15 +176,13 @@ impl Event {
     {
         let function = CString::new(function).unwrap();
         let data = data.into().into_boxed_slice();
-        unsafe { webui_send_raw_client(self.as_ptr(), function.as_ptr(), data.as_ptr() as _, data.len()) }
+        unsafe {
+            webui_send_raw_client(
+                self.as_ptr(),
+                function.as_ptr(),
+                data.as_ptr() as _,
+                data.len(),
+            )
+        }
     }
-
-}
-
-pub enum EventType {
-    Disconnected = 0,
-    Connected = 1,
-    MouseClick = 2,
-    Navigation = 3,
-    Callback = 4,
 }

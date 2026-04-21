@@ -2,17 +2,19 @@ mod context;
 mod error;
 mod event;
 mod handler;
+mod types;
 mod window;
+
+pub(crate) use context::*;
+pub use error::*;
+pub use event::*;
+pub use types::*;
+pub use window::*;
 
 use std::{
     ffi::{c_char, c_void, CStr, CString},
     panic::{catch_unwind, AssertUnwindSafe},
 };
-
-pub(crate) use context::*;
-pub use error::*;
-pub use event::*;
-pub use window::*;
 
 use webui_sys::*;
 
@@ -191,21 +193,4 @@ pub(crate) fn get_last_error_message() -> String {
         let message = webui_get_last_error_message();
         CStr::from_ptr(message).to_string_lossy().to_string()
     }
-}
-
-#[repr(i32)] // Replace u32 with the actual type of webui_config
-pub(crate) enum Config {
-    ShowWaitConnection,
-    UiEventBlocking,
-    FolderMonitor,
-    MultiClient,
-    UseCookies,
-    AsynchronousResponse,
-}
-
-#[repr(usize)]
-pub enum LoggerLevel {
-    Debug,
-    Info,
-    Error,
 }
