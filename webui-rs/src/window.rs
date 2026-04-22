@@ -21,6 +21,7 @@ pub(crate) struct WindowHandler {
     on_file: Mutex<Option<Arc<dyn FileHandlerWindow>>>,
 }
 
+/// The WebUI window type.
 #[repr(transparent)]
 pub struct Window {
     pub(crate) inner: Arc<WindowInner>,
@@ -52,11 +53,8 @@ impl Window {
     /// To use only WebView please use show_webview()
     pub fn show(&self, content: &str) -> Result<(), WebUIError> {
         let content = CString::new(content).unwrap();
-        if unsafe { webui_show(self.id(), content.as_ptr()) } {
-            Ok(())
-        } else {
-            Err(WebUIError::get_last_error())
-        }
+        let result = unsafe { webui_show(self.id(), content.as_ptr()) };
+        WebUIError::from_bool(result)
     }
 
     /// Show a window using a specific web browser.
@@ -65,9 +63,10 @@ impl Window {
     /// It's recommended to use ChromiumBased browser.
     /// On macOS, the browser's icon may still appear in the Dock after exit. We recommend using show_webview on macOS to
     /// avoid this.
-    pub fn show_browser(&self, content: &str, browser: Browser) {
+    pub fn show_browser(&self, content: &str, browser: Browser) -> Result<(), WebUIError> {
         let content = CString::new(content).unwrap();
-        unsafe { webui_show_browser(self.id(), content.as_ptr(), browser as _) };
+        let result = unsafe { webui_show_browser(self.id(), content.as_ptr(), browser as _) };
+        WebUIError::from_bool(result)
     }
 
     /// Show a WebView window using embedded HTML, a URL, or a local file. If the window is already open, it will be refreshed.
@@ -79,9 +78,10 @@ impl Window {
     /// - Windows Dependencies: WebView2, and WebView2Loader.dll.
     /// - Linux Dependencies: WebKit GTK v3.
     /// - macOS Dependencies: WebKit (WKWebView).
-    pub fn show_webview(&self, content: &str) {
+    pub fn show_webview(&self, content: &str) -> Result<(), WebUIError> {
         let content = CString::new(content).unwrap();
-        unsafe { webui_show_wv(self.id(), content.as_ptr()) };
+        let result = unsafe { webui_show_wv(self.id(), content.as_ptr()) };
+        WebUIError::from_bool(result)
     }
 
     /// Start only the local web server without opening a browser window, and return the URL. Useful for headless web app
@@ -289,11 +289,12 @@ impl Window {
     }
 
     /// Run JavaScript and get the response back. Works in single client mode. Make sure your buffer is large enough to hold the response.
-    pub fn script(&self, script: &str, timeout: usize, capacity: usize) -> Option<String> {
+    pub fn script(&self, script: &str, timeout: usize, capacity: usize) -> Result<String, WebUIError> {
         let mut buffer: Vec<c_char> = Vec::with_capacity(capacity);
         let script = CString::new(script).unwrap();
         unsafe { webui_script(self.id(), script.as_ptr(), timeout, buffer.as_mut_ptr(), capacity) }
             .then(|| unsafe { CStr::from_ptr(buffer.as_ptr()) }.to_string_lossy().to_string())
+            .ok_or(WebUIError::get_last_error())
     }
 
     /// Choose between Deno, Bun, and Nodejs as the runtime for .js and .ts files served by the web server.
@@ -391,8 +392,9 @@ impl Window {
     }
 
     /// Set a specific network port for the window's web server. Useful when integrating with an external web server like NGINX.
-    pub fn set_port(&self, port: usize) -> bool {
-        unsafe { webui_set_port(self.id(), port) }
+    pub fn set_port(&self, port: usize) -> Result<(), WebUIError> {
+        let result = unsafe { webui_set_port(self.id(), port) };
+        WebUIError::from_bool(result)
     }
 
     /// Get the process ID of the backend application (the parent process). The web browser may create additional child processes.

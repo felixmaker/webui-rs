@@ -1,4 +1,6 @@
+/// The Runtime type.
 #[repr(i32)]
+#[allow(missing_docs)]
 pub enum Runtime {
     None,
     Deno,
@@ -6,7 +8,9 @@ pub enum Runtime {
     Bun,
 }
 
+/// The Browser type.
 #[repr(usize)]
+#[allow(missing_docs)]
 pub enum Browser {
     NoBrowser,
     AnyBrowser,
@@ -34,18 +38,26 @@ pub(crate) enum Config {
     AsynchronousResponse,
 }
 
+/// The logger level.
 #[repr(usize)]
+#[allow(missing_docs)]
 pub enum LoggerLevel {
     Debug,
     Info,
     Error,
 }
 
+/// The event type.
 #[repr(usize)]
 pub enum EventType {
-    Disconnected,
+    /// Window disconnection event.
+    Disconnected = 0,
+    /// Window connection event.
     Connected,
+    /// Mouse click event.
     MouseClick,
+    /// Window navigation event.
     Navigation,
+    /// Custom function call event.
     Callback,
 }

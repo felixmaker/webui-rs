@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::{get_last_error_message, get_last_error_number};
 
-/// The web ui error.
+/// The WebUI error.
 #[derive(Debug)]
 pub struct WebUIError {
     /// The error code.

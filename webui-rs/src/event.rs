@@ -6,7 +6,7 @@ use std::{
 
 use webui_sys::*;
 
-use crate::{EventType, Window, CONTEXT};
+use crate::{EventType, WebUIError, Window, CONTEXT};
 
 /// The event type.
 #[repr(transparent)]
@@ -77,15 +77,15 @@ impl<'a> Event<'a> {
     /// Get the cookies.
     pub fn cookies(&self) -> Option<String> {
         let cookies = self.get_event().cookies;
-        (!cookies.is_null())
-            .then_some(unsafe { CStr::from_ptr(cookies).to_string_lossy().to_string() })
+        (!cookies.is_null()).then_some(unsafe { CStr::from_ptr(cookies).to_string_lossy().to_string() })
     }
 
     /// Show a window for a specific single client. Useful in multi-client mode to send different content to different connected
     /// clients.
-    pub fn show_client(&self, content: &str) -> bool {
+    pub fn show_client(&self, content: &str) -> Result<(), WebUIError> {
         let content = CString::new(content).unwrap();
-        unsafe { webui_show_client(self.as_ptr(), content.as_ptr()) }
+        let result = unsafe { webui_show_client(self.as_ptr(), content.as_ptr()) };
+        WebUIError::from_bool(result)
     }
 
     /// Close the connection for a specific single client only, without closing the window for other connected clients.
@@ -108,23 +108,12 @@ impl<'a> Event<'a> {
     }
 
     /// Run JavaScript for a specific single client and get the response back.
-    pub fn script_client(&self, script: &str, timeout: usize, capacity: usize) -> Option<String> {
+    pub fn script_client(&self, script: &str, timeout: usize, capacity: usize) -> Result<String, WebUIError> {
         let mut buffer: Vec<c_char> = Vec::with_capacity(capacity);
         let script = CString::new(script).unwrap();
-        unsafe {
-            webui_script_client(
-                self.as_ptr(),
-                script.as_ptr(),
-                timeout,
-                buffer.as_mut_ptr(),
-                capacity,
-            )
-        }
-        .then(|| {
-            unsafe { CStr::from_ptr(buffer.as_ptr()) }
-                .to_string_lossy()
-                .to_string()
-        })
+        unsafe { webui_script_client(self.as_ptr(), script.as_ptr(), timeout, buffer.as_mut_ptr(), capacity) }
+            .then(|| unsafe { CStr::from_ptr(buffer.as_ptr()) }.to_string_lossy().to_string())
+            .ok_or(WebUIError::get_last_error())
     }
 
     /// Get the number of arguments passed to the callback from JavaScript.
@@ -216,13 +205,6 @@ impl<'a> Event<'a> {
     {
         let function = CString::new(function).unwrap();
         let data = data.into().into_boxed_slice();
-        unsafe {
-            webui_send_raw_client(
-                self.as_ptr(),
-                function.as_ptr(),
-                data.as_ptr() as _,
-                data.len(),
-            )
-        }
+        unsafe { webui_send_raw_client(self.as_ptr(), function.as_ptr(), data.as_ptr() as _, data.len()) }
     }
 }

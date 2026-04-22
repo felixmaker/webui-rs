@@ -3,5 +3,9 @@ name = "webui-rs"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "webui"
+path = "src/lib.rs"
+
 [dependencies]
 webui-sys = { path = "../webui-sys", version = "0.1" }

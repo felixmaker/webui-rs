@@ -1,3 +1,7 @@
+#![warn(missing_docs)]
+
+//! Rust bindings to WebUI.
+
 mod context;
 mod error;
 mod event;
@@ -93,9 +97,10 @@ pub fn set_asynchronous_response(status: bool) {
 }
 
 /// Set the web-server root folder path for all windows.
-pub fn set_default_root_folder(path: &str) -> bool {
+pub fn set_default_root_folder(path: &str) -> Result<(), WebUIError> {
     let path = CString::new(path).unwrap();
-    unsafe { webui_set_default_root_folder(path.as_ptr()) }
+    let result = unsafe { webui_set_default_root_folder(path.as_ptr()) };
+    WebUIError::from_bool(result)
 }
 
 /// Get the HTTP MIME type string for a given file extension.
@@ -151,10 +156,11 @@ pub fn decode(text: &str) -> String {
 ///
 /// # Remarks
 /// This works only with the TLS build of WebUI (webui-2-secure).
-pub fn set_tls_certificate(certificate_pem: &str, private_key_pem: &str) -> bool {
+pub fn set_tls_certificate(certificate_pem: &str, private_key_pem: &str) -> Result<(), WebUIError> {
     let certificate_pem = CString::new(certificate_pem).unwrap();
     let private_key_pem = CString::new(private_key_pem).unwrap();
-    unsafe { webui_set_tls_certificate(certificate_pem.as_ptr(), private_key_pem.as_ptr()) }
+    let result = unsafe { webui_set_tls_certificate(certificate_pem.as_ptr(), private_key_pem.as_ptr()) };
+    WebUIError::from_bool(result)
 }
 
 /// Set a custom logging function to receive WebUI's internal log messages. Useful for debugging or integrating with your
