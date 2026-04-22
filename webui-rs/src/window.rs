@@ -214,13 +214,13 @@ impl Window {
         F: CloseHandler,
     {
         extern "C" fn shim(id: usize) -> bool {
-            let Some(window) = get_window(id) else {
-                return true;
+            let f = || -> Option<bool> {
+                let window = get_window(id)?;
+                let callback = window.inner.handler.on_close.lock().ok()?.as_ref().cloned()?;
+                let result = catch_unwind(AssertUnwindSafe(|| callback(&window))).ok()?;
+                Some(result)
             };
-            let callback = window.inner.handler.on_close.lock().unwrap().clone();
-            callback.map_or(true, |callback| {
-                std::panic::catch_unwind(AssertUnwindSafe(|| callback(&window))).unwrap_or(true)
-            })
+            f().unwrap_or(true)
         }
         *self.inner.handler.on_close.lock().unwrap() = Some(Arc::new(callback));
         unsafe { webui_set_close_handler_wv(self.id(), Some(shim)) }
@@ -256,25 +256,14 @@ impl Window {
     {
         let function = CString::new(function).unwrap();
         extern "C" fn shim(event: *mut webui_event_t) {
-            let Some(event) = (unsafe { Event::new(event) }) else {
-                return;
+            let f = || -> Option<()> {
+                let event = (unsafe { Event::new(event) })?;
+                let window = event.window()?;
+                let bind_id = event.bind_id();
+                let callback = window.inner.handler.on_event.lock().ok()?.get(&bind_id).cloned()?;
+                catch_unwind(AssertUnwindSafe(|| callback(&event))).ok()
             };
-            let window = event.window();
-            let bind_id = event.bind_id();
-
-            if let Some(window) = window {
-                let callback = window
-                    .inner
-                    .handler
-                    .on_event
-                    .lock()
-                    .unwrap()
-                    .get(&bind_id)
-                    .cloned();
-                if let Some(callback) = callback {
-                    let _ = catch_unwind(AssertUnwindSafe(|| callback(&event)));
-                }
-            }
+            f();
         }
         let id = unsafe { webui_bind(self.id(), function.as_ptr(), Some(shim)) };
         self.inner
@@ -303,20 +292,8 @@ impl Window {
     pub fn script(&self, script: &str, timeout: usize, capacity: usize) -> Option<String> {
         let mut buffer: Vec<c_char> = Vec::with_capacity(capacity);
         let script = CString::new(script).unwrap();
-        unsafe {
-            webui_script(
-                self.id(),
-                script.as_ptr(),
-                timeout,
-                buffer.as_mut_ptr(),
-                capacity,
-            )
-        }
-        .then(|| {
-            unsafe { CStr::from_ptr(buffer.as_ptr()) }
-                .to_string_lossy()
-                .to_string()
-        })
+        unsafe { webui_script(self.id(), script.as_ptr(), timeout, buffer.as_mut_ptr(), capacity) }
+            .then(|| unsafe { CStr::from_ptr(buffer.as_ptr()) }.to_string_lossy().to_string())
     }
 
     /// Choose between Deno, Bun, and Nodejs as the runtime for .js and .ts files served by the web server.
@@ -340,41 +317,26 @@ impl Window {
     where
         F: FileHandlerWindow,
     {
-        extern "C" fn shim(
-            window: usize,
-            filename: *const c_char,
-            length: *mut c_int,
-        ) -> *const c_void {
-            let Some(window) = get_window(window) else {
-                return std::ptr::null();
-            };
-            let filename = unsafe { CStr::from_ptr(filename).to_string_lossy().to_string() };
-            let callback = window
-                .inner
-                .handler
-                .on_file
-                .lock()
-                .unwrap()
-                .as_ref()
-                .cloned();
-            let response = callback.and_then(|callback| {
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    callback(&window, &filename)
-                }))
-                .ok()
-            });
-            if let Some(Some(data)) = response {
-                let len = data.len();
+        extern "C" fn shim(window: usize, filename: *const c_char, length: *mut c_int) -> *const c_void {
+            let callback = || -> Option<*const c_void> {
+                let window = get_window(window)?;
+                let filename = unsafe { CStr::from_ptr(filename).to_string_lossy().to_string() };
+                let callback = window.inner.handler.on_file.lock().ok()?.as_ref().cloned()?;
+                let response = catch_unwind(AssertUnwindSafe(|| callback(&window, &filename))).ok()??;
+
+                let len = response.len();
                 unsafe {
                     let ptr = webui_malloc(len);
                     if !ptr.is_null() {
-                        std::ptr::copy_nonoverlapping(data.as_ptr(), ptr as *mut u8, len);
-                        *length = len as c_int;
-                        return ptr;
+                        return Option::None;
                     }
+                    std::ptr::copy_nonoverlapping(response.as_ptr(), ptr as *mut u8, len);
+                    *length = len as c_int;
+                    return Some(ptr as *const c_void);
                 }
-            }
-            std::ptr::null()
+            };
+
+            callback().unwrap_or(std::ptr::null())
         }
 
         *self.inner.handler.on_file.lock().unwrap() = Some(Arc::new(callback));
